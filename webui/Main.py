@@ -38,6 +38,7 @@ from app.models.llm_provider import (
 )
 from app.models.schema import (
     MaterialInfo,
+    StoryboardScene,
     VideoAspect,
     VideoConcatMode,
     VideoFitMode,
@@ -137,6 +138,7 @@ VIDEO_SOURCE_GROUPS = {
     ),
     "ai_image": ("openai_image",),
     "local": ("local",),
+    "storyboard": ("storyboard",),
 }
 # Upload-Post 的 API Key 与发布用户分别在两个页面管理，并且发布用户名称
 # 不等于登录邮箱。集中维护入口可以避免多语言文案各自硬编码 URL 后发生偏差，
@@ -5169,6 +5171,89 @@ def _render_script_settings(panel, params):
             )
 
 
+
+
+def _render_storyboard_editor(params):
+    """Maintain stable scene ids so reordering does not lose widget state."""
+    st.markdown("#### Storyboard")
+    st.caption("Mix generated images with your uploaded PNG/JPG screenshots. "
+               "Scenes play in the order shown below.")
+    scenes = st.session_state.setdefault("storyboard_editor_scenes", [])
+    if st.button("+ Add scene", key="storyboard_add_scene"):
+        scenes.append({"id": uuid4().hex, "type": "generated_image",
+                       "prompt": "", "file": "", "duration": 5})
+        st.rerun()
+
+    result = []
+    for index, record in enumerate(scenes):
+        scene_id = record["id"]
+        with st.container(border=True):
+            st.markdown(f"**Scene {index + 1}**")
+            c1, c2, c3 = st.columns(3)
+            if c1.button("↑", key=f"storyboard_up_{scene_id}", disabled=index == 0):
+                scenes[index - 1], scenes[index] = scenes[index], scenes[index - 1]
+                st.rerun()
+            if c2.button("↓", key=f"storyboard_down_{scene_id}",
+                         disabled=index == len(scenes) - 1):
+                scenes[index + 1], scenes[index] = scenes[index], scenes[index + 1]
+                st.rerun()
+            if c3.button("Remove", key=f"storyboard_remove_{scene_id}"):
+                scenes.pop(index)
+                st.rerun()
+
+            record["type"] = st.selectbox(
+                "Scene source", ["generated_image", "local"],
+                index=0 if record["type"] == "generated_image" else 1,
+                key=f"storyboard_type_{scene_id}",
+                format_func=lambda value: "AI Image" if value == "generated_image"
+                else "Uploaded screenshot / image",
+            )
+            record["duration"] = st.number_input(
+                "Duration (seconds)", min_value=1, max_value=30,
+                value=int(record["duration"]), step=1,
+                key=f"storyboard_duration_{scene_id}",
+            )
+            if record["type"] == "generated_image":
+                record["prompt"] = st.text_area(
+                    "Image prompt", value=record["prompt"],
+                    key=f"storyboard_prompt_{scene_id}", max_chars=2000,
+                    placeholder="Cinematic shot of an accountant in a modern Irish office",
+                )
+            else:
+                uploaded = st.file_uploader(
+                    "Upload a PNG/JPG screenshot", type=["png", "jpg", "jpeg"],
+                    key=f"storyboard_upload_{scene_id}",
+                )
+                if uploaded is not None:
+                    upload_signature = (uploaded.name, uploaded.size,
+                                        getattr(uploaded, "file_id", None))
+                    if record.get("upload_signature") != upload_signature:
+                        try:
+                            record["file"] = material_upload_service.save_material_upload(
+                                uploaded.name, uploaded
+                            )
+                            record["upload_signature"] = upload_signature
+                        except (material_upload_service.MaterialUploadError,
+                                material_upload_service.MaterialServiceError) as exc:
+                            st.error(str(exc))
+                if record["file"]:
+                    st.caption(f"Saved image: {record['file']}")
+                else:
+                    st.info("Choose an image to use in this scene.")
+            result.append(StoryboardScene.model_validate({
+                "type": record["type"],
+                "prompt": record["prompt"] or "Temporary prompt",
+                "file": record["file"] or "pending.png",
+                "duration": record["duration"],
+            }))
+    params.storyboard = result
+    if scenes:
+        st.caption(f"{len(scenes)} scenes. Total: "
+                   f"{sum(item.duration for item in result)} seconds.")
+    else:
+        st.info("Click Add scene to start your storyboard.")
+
+
 def _render_video_settings(panel, params):
     """渲染视频设置并返回本次选择的本地素材。"""
     uploaded_files = []
@@ -5191,6 +5276,7 @@ def _render_video_settings(panel, params):
                 "loomloom": tr("Shengsuan Cloud AI Video"),
                 "openai_image": tr("OpenAI Compatible Text-to-Image"),
                 "local": tr("Local file"),
+                "storyboard": "Storyboard (AI + uploaded images)",
             }
             saved_video_source_name = str(
                 config.app.get("video_source", "pexels") or "pexels"
@@ -5202,6 +5288,7 @@ def _render_video_settings(panel, params):
                     (tr("AI Video"), VIDEO_SOURCE_GROUPS["ai_video"]),
                     (tr("AI Image"), VIDEO_SOURCE_GROUPS["ai_image"]),
                     (tr("Local Material"), VIDEO_SOURCE_GROUPS["local"]),
+                    ("Storyboard", VIDEO_SOURCE_GROUPS["storyboard"]),
                 ),
                 default_value=saved_video_source_name,
                 key="video_source_select",
@@ -5229,6 +5316,8 @@ def _render_video_settings(panel, params):
                 st.caption(tr("Metaso MiniMax H3 Help"))
             if params.video_source == "muapi":
                 st.caption(tr("MuAPI AI Video Help"))
+            if params.video_source == "storyboard":
+                _render_storyboard_editor(params)
             if params.video_source == "local":
                 # Streamlit 的文件类型校验对扩展名大小写敏感，这里同时放行大小写两种形式。
                 local_file_types = sorted(
@@ -8273,6 +8362,27 @@ def _render_generation_controls(
                 st.error(tr("Unsupported Upload File Type"))
                 st.stop()
             params.custom_audio_file = custom_audio_path
+
+        if params.video_source == "storyboard":
+            if not params.storyboard:
+                _remove_active_generation_task(task_id)
+                st.error("Add at least one storyboard scene before generating.")
+                st.stop()
+            # Reject UI placeholders; never submit unresolved prompts or files.
+            for index, scene in enumerate(params.storyboard, start=1):
+                record = st.session_state["storyboard_editor_scenes"][index - 1]
+                if scene.type == "generated_image":
+                    if not record["prompt"].strip():
+                        _remove_active_generation_task(task_id)
+                        st.error(f"Scene {index}: enter an AI image prompt.")
+                        st.stop()
+                    scene.prompt = record["prompt"].strip()
+                else:
+                    if not record["file"]:
+                        _remove_active_generation_task(task_id)
+                        st.error(f"Scene {index}: upload an image.")
+                        st.stop()
+                    scene.file = record["file"]
 
         if uploaded_files:
             # 每次重新上传时都以本次选择的素材为准，避免旧素材不断重复追加。
