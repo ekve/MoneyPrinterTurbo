@@ -24,7 +24,7 @@ def _build_local_scene(params: VideoParams, scene, index: int) -> str:
     duration = _scene_duration(params, scene)
 
     extension = utils.parse_extension(scene.file).lower()
-    if extension not in {".jpg", ".jpeg", ".png"}:
+    if extension not in {"jpg", "jpeg", "png"}:
         raise StoryboardError(
             f"storyboard scene {index}: v0.1 local storyboard scenes must be "
             "JPG or PNG images"
