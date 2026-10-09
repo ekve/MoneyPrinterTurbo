@@ -26,6 +26,7 @@ from app.services import (
     muapi,
     ofox,
     sonilo,
+    storyboard,
     subtitle,
     task_artifacts,
     twelvelabs,
@@ -97,7 +98,7 @@ _VIDEO_MUSIC_PROVIDERS = {
 _SUPPORTED_VIDEO_SOURCES = frozenset({
     "pexels", "pixabay", "coverr", "local", "wavespeed",
     "volcengine_seedance", "ofox", "metaso_minimax", "muapi",
-    "loomloom", "openai_image",
+    "loomloom", "openai_image", "storyboard",
 })
 
 
@@ -721,7 +722,17 @@ def get_video_materials(
     audio_duration,
     loomloom_video_request: loomloom.LoomLoomConfirmedVideoRequest | None = None,
 ):
-    if params.video_source == "local":
+    if params.video_source == "storyboard":
+        logger.info("\n\n## building storyboard materials")
+        try:
+            return storyboard.build_storyboard_materials(
+                task_id=task_id,
+                params=params,
+            )
+        except storyboard.StoryboardError as exc:
+            _mark_task_failed(task_id, "materials", str(exc))
+            return None
+    elif params.video_source == "local":
         logger.info("\n\n## preprocess local materials")
         materials = video.preprocess_video(
             materials=params.video_materials, clip_duration=params.video_clip_duration
@@ -999,8 +1010,8 @@ def generate_final_videos(
         video_music_provider is not None
         and bgm_service.should_use_bgm(params.bgm_type, params.bgm_volume)
     )
-    # Matching preserves keyword order; batch allocation varies each keyword's candidates.
-    if params.match_materials_to_script:
+    # Storyboards are explicitly ordered; matching also preserves keyword order.
+    if params.video_source == "storyboard" or params.match_materials_to_script:
         video_concat_mode = VideoConcatMode.sequential
     elif params.video_count == 1:
         video_concat_mode = params.video_concat_mode
@@ -1674,7 +1685,10 @@ def _run_pipeline(
 
     # 2. Generate terms
     video_terms = ""
-    if stop_at in {"terms", "materials", "video"} and params.video_source != "local":
+    if (
+        stop_at in {"terms", "materials", "video"}
+        and params.video_source not in {"local", "storyboard"}
+    ):
         video_terms = generate_terms(task_id, params, video_script)
         if not video_terms:
             return _mark_task_failed(
