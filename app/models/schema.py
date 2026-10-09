@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, List, Literal, Optional, Union
 
 import pydantic
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import config
 
@@ -88,6 +88,23 @@ class MaterialInfo:
     source_info: Optional[dict[str, Any]] = None
 
 
+class StoryboardScene(BaseModel):
+    """One ordered scene in a mixed local/generated storyboard."""
+
+    type: Literal["generated_image", "local"]
+    prompt: str = Field(default="", max_length=2000)
+    file: str = Field(default="", max_length=1000)
+    duration: Optional[int] = Field(default=None, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        if self.type == "generated_image" and not self.prompt.strip():
+            raise ValueError("generated_image storyboard scenes require a prompt")
+        if self.type == "local" and not self.file.strip():
+            raise ValueError("local storyboard scenes require a file")
+        return self
+
+
 class VideoParams(BaseModel):
     """
     {
@@ -118,6 +135,11 @@ class VideoParams(BaseModel):
     video_source: Optional[str] = "pexels"
     video_materials: Optional[List[MaterialInfo]] = (
         None  # Materials used to generate the video
+    )
+
+    storyboard: Optional[List[StoryboardScene]] = Field(
+        default=None,
+        max_length=50,
     )
 
     custom_audio_file: Optional[str] = (
