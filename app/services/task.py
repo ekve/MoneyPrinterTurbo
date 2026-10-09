@@ -1048,7 +1048,12 @@ def generate_final_videos(
             video_fit_mode=params.video_fit_mode,
             video_concat_mode=video_concat_mode,
             video_transition_mode=video_transition_mode,
-            max_clip_duration=params.video_clip_duration,
+            max_clip_duration=(
+                max(params.video_clip_duration, *(scene.duration or params.video_clip_duration
+                    for scene in (params.storyboard or [])))
+                if params.video_source == "storyboard"
+                else params.video_clip_duration
+            ),
             threads=params.n_threads,
             clip_speed=params.video_clip_speed,
             progress_callback=_stage_progress_reporter(
