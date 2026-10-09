@@ -62,7 +62,7 @@ def test_mixed_scenes_preserve_explicit_order_and_duration():
     assert [call.kwargs["minimum_duration"] for call in generate.call_args_list] == [4, 6]
     assert [call.args[1] for call in render.call_args_list] == [4, 6]
     assert preprocess.call_args.kwargs["clip_duration"] == 8
-    assert preprocess.call_args.kwargs["materials"][0].url == "/task/dashboard.mp4"
+    assert preprocess.call_args.kwargs["materials"][0].url == "dashboard.png"
 
 
 def test_default_duration_is_video_clip_duration():
