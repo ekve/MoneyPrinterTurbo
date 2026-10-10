@@ -95,6 +95,8 @@ class StoryboardScene(BaseModel):
     prompt: str = Field(default="", max_length=2000)
     file: str = Field(default="", max_length=1000)
     duration: Optional[int] = Field(default=None, ge=1, le=30)
+    voiceover: str = Field(default="", max_length=5000)
+    duration_mode: Literal["manual", "auto"] = "manual"
 
     @model_validator(mode="after")
     def validate_source(self):
