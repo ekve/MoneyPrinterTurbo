@@ -1749,11 +1749,11 @@ def _render_brand(available_update: str | None = None):
         <h1 class="mpt-brand">
             <span class="mpt-brand__name">MoneyPrinterTurbo</span>
             <a class="mpt-brand__version"
-               href="https://github.com/harry0703/MoneyPrinterTurbo"
+               href="https://github.com/ekve/MoneyPrinterTurbo/tree/feature/storyboard"
                target="_blank"
                rel="noopener noreferrer"
-               aria-label="Open MoneyPrinterTurbo on GitHub"
-               title="Open project on GitHub">v1.3.8-feature</a>
+               aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
+               title="Open storyboard branch on GitHub">v1.3.8-storyboard_editor</a>
             {update_link}
         </h1>
         """,
