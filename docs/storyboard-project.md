@@ -61,8 +61,11 @@ taxesai-demo.zip
 In stage 1, `voiceover` and `voice` are stored as project metadata but
 **not yet used for per-scene TTS**. `duration: "auto"` imports with a 5-second
 preview duration. Real TTS-based scene synchronization is a separate next stage.
-The current **Video Script** and **Audio Settings** still control actual
-narration. Do not treat an imported ZIP as a finished synchronized video.
+On import, the editor combines scene `voiceover` fields into the existing
+**Video Script**, selects the requested TTS voice when available, and restores
+the **Video Subject**. The current **Video Script** and **Audio Settings** still
+control actual narration. Do not treat an imported ZIP as a finished
+synchronized video.
 
 ## Validation / safety
 
