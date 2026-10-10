@@ -1753,7 +1753,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo on GitHub"
-               title="Open project on GitHub">v{html.escape(str(config.project_version))}</a>
+               title="Open project on GitHub">v1.3.8-feature</a>
             {update_link}
         </h1>
         """,
@@ -5284,11 +5284,11 @@ def _render_video_settings(panel, params):
             params.video_source = grouped_selectbox(
                 tr("Video Source"),
                 groups=(
+                    ("Storyboard", VIDEO_SOURCE_GROUPS["storyboard"]),
                     (tr("Stock Video"), VIDEO_SOURCE_GROUPS["stock_video"]),
                     (tr("AI Video"), VIDEO_SOURCE_GROUPS["ai_video"]),
                     (tr("AI Image"), VIDEO_SOURCE_GROUPS["ai_image"]),
                     (tr("Local Material"), VIDEO_SOURCE_GROUPS["local"]),
-                    ("Storyboard", VIDEO_SOURCE_GROUPS["storyboard"]),
                 ),
                 default_value=saved_video_source_name,
                 key="video_source_select",
