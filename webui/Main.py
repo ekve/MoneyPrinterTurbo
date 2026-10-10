@@ -5205,7 +5205,7 @@ def _render_storyboard_editor(params):
                 st.session_state["storyboard_project_title_input"] = project["title"]
                 st.session_state["storyboard_project_voice_input"] = project["voice"]
                 st.session_state["storyboard_pending_subject"] = project["title"]
-                st.session_state["storyboard_pending_script"] = "\\n\\n".join(
+                st.session_state["storyboard_pending_script"] = "\n\n".join(
                     scene["voiceover"] for scene in project["scenes"]
                     if scene["voiceover"].strip()
                 )
