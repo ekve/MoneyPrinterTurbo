@@ -5208,41 +5208,18 @@ def _render_storyboard_editor(params):
                 st.session_state.pop("storyboard_export_zip", None)
                 st.rerun()
 
+    st.session_state.setdefault("storyboard_project_title_input", "")
+    st.session_state.setdefault("storyboard_project_voice_input", "")
     project_title = st.text_input(
         "Project title", key="storyboard_project_title_input",
-        value=st.session_state.get("storyboard_project_title_input", ""),
         max_chars=200,
     )
     project_voice = st.text_input(
         "Preferred voice (used in stage 2)",
         key="storyboard_project_voice_input",
-        value=st.session_state.get("storyboard_project_voice_input", ""),
         max_chars=150,
     )
     scenes = st.session_state.setdefault("storyboard_editor_scenes", [])
-    if st.button("Prepare ZIP export", key="storyboard_export_prepare"):
-        try:
-            aspect = st.session_state.get(
-                localized_widget_key("video_aspect_for_storyboard"),
-                getattr(params.video_aspect, "value", params.video_aspect),
-            )
-            st.session_state["storyboard_export_zip"] = storyboard_project.export_project(
-                project_title,
-                str(aspect),
-                project_voice,
-                scenes,
-            )
-        except storyboard_project.StoryboardProjectError as exc:
-            st.error(str(exc))
-    if st.session_state.get("storyboard_export_zip"):
-        st.download_button(
-            "Download Storyboard ZIP",
-            data=st.session_state["storyboard_export_zip"],
-            file_name="storyboard-project.zip",
-            mime="application/zip",
-            key="storyboard_export_download",
-        )
-        st.caption("Export snapshot prepared. Prepare again after editing scenes.")
     if st.button("+ Add scene", key="storyboard_add_scene"):
         scenes.append({"id": uuid4().hex, "type": "generated_image",
                        "prompt": "", "file": "", "duration": 5,
@@ -5331,6 +5308,29 @@ def _render_storyboard_editor(params):
                 "duration_mode": record["duration_mode"],
                 "voiceover": record["voiceover"],
             }))
+    if st.button("Prepare ZIP export", key="storyboard_export_prepare"):
+        try:
+            aspect = st.session_state.get(
+                localized_widget_key("video_aspect_for_storyboard"),
+                getattr(params.video_aspect, "value", params.video_aspect),
+            )
+            st.session_state["storyboard_export_zip"] = storyboard_project.export_project(
+                project_title,
+                str(aspect),
+                project_voice,
+                scenes,
+            )
+        except storyboard_project.StoryboardProjectError as exc:
+            st.error(str(exc))
+    if st.session_state.get("storyboard_export_zip"):
+        st.download_button(
+            "Download Storyboard ZIP",
+            data=st.session_state["storyboard_export_zip"],
+            file_name="storyboard-project.zip",
+            mime="application/zip",
+            key="storyboard_export_download",
+        )
+        st.caption("Export snapshot prepared. Prepare again after editing scenes.")
     params.storyboard = result
     if scenes:
         st.caption(f"{len(scenes)} scenes. Total: "
