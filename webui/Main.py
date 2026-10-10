@@ -47,6 +47,7 @@ from app.models.schema import (
 )
 from app.services import bgm as bgm_service
 from app.services import material_upload as material_upload_service
+from app.services import storyboard_project
 from app.services import (
     cache_manager,
     llm,
@@ -265,6 +266,7 @@ MAX_SETTINGS_TRANSFER_BYTES = 2 * 1024 * 1024
 PRESET_EXCLUDED_PARAM_KEYS = frozenset(
     {
         "video_materials",
+        "storyboard",
         "custom_audio_file",
         "bgm_file",
     }
@@ -1753,7 +1755,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
-               title="Open storyboard branch on GitHub">v1.3.8-storyboard_editor</a>
+               title="Open storyboard branch on GitHub">v1.3.8-storyboard_project</a>
             {update_link}
         </h1>
         """,
@@ -4978,6 +4980,9 @@ def _render_loomloom_script_generation(params):
 
 def _render_script_settings(panel, params):
     """渲染文案设置并更新生成参数。"""
+    pending_title = st.session_state.pop("storyboard_pending_subject", None)
+    if pending_title:
+        st.session_state["video_subject"] = pending_title
     with panel:
         with st.container(border=True):
             st.write(tr("Video Script Settings"))
@@ -5176,12 +5181,69 @@ def _render_script_settings(panel, params):
 def _render_storyboard_editor(params):
     """Maintain stable scene ids so reordering does not lose widget state."""
     st.markdown("#### Storyboard")
-    st.caption("Mix generated images with your uploaded PNG/JPG screenshots. "
-               "Scenes play in the order shown below.")
+    st.caption("Import a complete ZIP project or build scenes manually. "
+               "Narration text is saved with each scene; automatic voice sync comes in stage 2.")
+    imported_zip = st.file_uploader(
+        "Storyboard ZIP project", type=["zip"], key="storyboard_project_import",
+        max_upload_size=60,
+    )
+    if st.button("Import ZIP", key="storyboard_import_button"):
+        if imported_zip is None:
+            st.error("Choose a Storyboard ZIP project first.")
+        else:
+            try:
+                if imported_zip.size > storyboard_project.MAX_ARCHIVE_BYTES:
+                    raise storyboard_project.StoryboardProjectError("ZIP exceeds 60 MB")
+                project = storyboard_project.import_project(imported_zip.getvalue())
+            except storyboard_project.StoryboardProjectError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["storyboard_editor_scenes"] = project["scenes"]
+                st.session_state["storyboard_project_title_input"] = project["title"]
+                st.session_state["storyboard_project_voice_input"] = project["voice"]
+                st.session_state["storyboard_pending_subject"] = project["title"]
+                _set_stable_widget_value(
+                    "video_aspect_for_storyboard", project["video_aspect"]
+                )
+                st.session_state.pop("storyboard_export_zip", None)
+                st.rerun()
+
+    project_title = st.text_input(
+        "Project title", key="storyboard_project_title_input",
+        value=st.session_state.get("storyboard_project_title_input", ""),
+        max_chars=200,
+    )
+    project_voice = st.text_input(
+        "Preferred voice (used in stage 2)",
+        key="storyboard_project_voice_input",
+        value=st.session_state.get("storyboard_project_voice_input", ""),
+        max_chars=150,
+    )
     scenes = st.session_state.setdefault("storyboard_editor_scenes", [])
+    if st.button("Prepare ZIP export", key="storyboard_export_prepare"):
+        try:
+            aspect = getattr(params.video_aspect, "value", params.video_aspect)
+            st.session_state["storyboard_export_zip"] = storyboard_project.export_project(
+                project_title,
+                str(aspect),
+                project_voice,
+                scenes,
+            )
+        except storyboard_project.StoryboardProjectError as exc:
+            st.error(str(exc))
+    if st.session_state.get("storyboard_export_zip"):
+        st.download_button(
+            "Download Storyboard ZIP",
+            data=st.session_state["storyboard_export_zip"],
+            file_name="storyboard-project.zip",
+            mime="application/zip",
+            key="storyboard_export_download",
+        )
+        st.caption("Export snapshot prepared. Prepare again after editing scenes.")
     if st.button("+ Add scene", key="storyboard_add_scene"):
         scenes.append({"id": uuid4().hex, "type": "generated_image",
-                       "prompt": "", "file": "", "duration": 5})
+                       "prompt": "", "file": "", "duration": 5,
+                       "duration_mode": "manual", "voiceover": ""})
         st.rerun()
 
     result = []
@@ -5208,10 +5270,28 @@ def _render_storyboard_editor(params):
                 format_func=lambda value: "AI Image" if value == "generated_image"
                 else "Uploaded screenshot / image",
             )
-            record["duration"] = st.number_input(
-                "Duration (seconds)", min_value=1, max_value=30,
-                value=int(record["duration"]), step=1,
-                key=f"storyboard_duration_{scene_id}",
+            record["duration_mode"] = st.selectbox(
+                "Timing", ["manual", "auto"],
+                index=0 if record.get("duration_mode", "manual") == "manual" else 1,
+                key=f"storyboard_mode_{scene_id}",
+                format_func=lambda mode: (
+                    "Manual" if mode == "manual" else "Auto from voiceover (stage 2)"
+                ),
+            )
+            if record["duration_mode"] == "auto":
+                st.caption("Stage 1 preview uses 5 seconds. Automatic TTS sync is not active yet.")
+                record["duration"] = 5
+            else:
+                record["duration"] = st.number_input(
+                    "Duration (seconds)", min_value=1, max_value=30,
+                    value=int(record["duration"]), step=1,
+                    key=f"storyboard_duration_{scene_id}",
+                )
+            record["voiceover"] = st.text_area(
+                "Scene voiceover (narration in stage 2)",
+                value=record.get("voiceover", ""),
+                max_chars=5000,
+                key=f"storyboard_voiceover_{scene_id}",
             )
             if record["type"] == "generated_image":
                 record["prompt"] = st.text_area(
@@ -5245,6 +5325,8 @@ def _render_storyboard_editor(params):
                 "prompt": record["prompt"] or "Temporary prompt",
                 "file": record["file"] or "pending.png",
                 "duration": record["duration"],
+                "duration_mode": record["duration_mode"],
+                "voiceover": record["voiceover"],
             }))
     params.storyboard = result
     if scenes:
