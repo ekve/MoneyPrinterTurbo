@@ -5222,7 +5222,10 @@ def _render_storyboard_editor(params):
     scenes = st.session_state.setdefault("storyboard_editor_scenes", [])
     if st.button("Prepare ZIP export", key="storyboard_export_prepare"):
         try:
-            aspect = getattr(params.video_aspect, "value", params.video_aspect)
+            aspect = st.session_state.get(
+                localized_widget_key("video_aspect_for_storyboard"),
+                getattr(params.video_aspect, "value", params.video_aspect),
+            )
             st.session_state["storyboard_export_zip"] = storyboard_project.export_project(
                 project_title,
                 str(aspect),
