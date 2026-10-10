@@ -4983,6 +4983,9 @@ def _render_script_settings(panel, params):
     pending_title = st.session_state.pop("storyboard_pending_subject", None)
     if pending_title:
         st.session_state["video_subject"] = pending_title
+    pending_script = st.session_state.pop("storyboard_pending_script", None)
+    if pending_script is not None:
+        st.session_state["video_script"] = pending_script
     with panel:
         with st.container(border=True):
             st.write(tr("Video Script Settings"))
@@ -5202,6 +5205,16 @@ def _render_storyboard_editor(params):
                 st.session_state["storyboard_project_title_input"] = project["title"]
                 st.session_state["storyboard_project_voice_input"] = project["voice"]
                 st.session_state["storyboard_pending_subject"] = project["title"]
+                st.session_state["storyboard_pending_script"] = "\\n\\n".join(
+                    scene["voiceover"] for scene in project["scenes"]
+                    if scene["voiceover"].strip()
+                )
+                if project["voice"]:
+                    st.session_state["storyboard_pending_voice"] = project["voice"]
+                    _set_stable_widget_value(
+                        "tts_server_select",
+                        _infer_tts_server_from_voice(project["voice"]),
+                    )
                 _set_stable_widget_value(
                     "video_aspect_for_storyboard", project["video_aspect"]
                 )
@@ -7233,6 +7246,13 @@ def _render_audio_settings(panel, params):
                 )
 
             friendly_names = {v: _friendly(v) for v in filtered_voices}
+            pending_storyboard_voice = st.session_state.get("storyboard_pending_voice")
+            if pending_storyboard_voice and pending_storyboard_voice in friendly_names:
+                _set_stable_widget_value(
+                    f"speech_synthesis_select_{selected_tts_server}",
+                    pending_storyboard_voice,
+                )
+                st.session_state.pop("storyboard_pending_voice", None)
 
             # Gemini 旧目录把推测的性别放在值里（例如 Charon-Male）。按基础
             # voice name 映射到新的官方风格值，升级后继续保留用户原来的音色。
