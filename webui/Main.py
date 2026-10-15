@@ -5351,8 +5351,22 @@ def _render_storyboard_editor(params):
         st.caption("Export snapshot prepared. Prepare again after editing scenes.")
     params.storyboard = result
     if scenes:
-        st.caption(f"{len(scenes)} scenes. Total: "
-                   f"{sum(item.duration for item in result)} seconds.")
+        auto_count = sum(scene.duration_mode == "auto" for scene in result)
+        manual_minimum = sum(
+            scene.duration or 0 for scene in result
+            if scene.duration_mode == "manual"
+        )
+        if auto_count:
+            summary = f"{len(scenes)} scenes, {auto_count} auto-timed. "
+            if manual_minimum:
+                summary += f"Manual scene minimum: {manual_minimum}s. "
+            summary += "Final duration is calculated from TTS during generation."
+        else:
+            summary = (
+                f"{len(scenes)} scenes. Minimum duration: {manual_minimum}s. "
+                "Narration may extend individual scenes."
+            )
+        st.caption(summary)
     else:
         st.info("Click Add scene to start your storyboard.")
 
