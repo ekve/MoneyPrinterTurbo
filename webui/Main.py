@@ -48,6 +48,7 @@ from app.models.schema import (
 from app.services import bgm as bgm_service
 from app.services import material_upload as material_upload_service
 from app.services import storyboard_project
+from app.services import storyboard_timing_display
 from app.services import (
     cache_manager,
     llm,
@@ -1755,7 +1756,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
-               title="Open storyboard branch on GitHub">v1.3.8-storyboard_timeline</a>
+               title="Open storyboard branch on GitHub">v1.3.8-storyboard_timing</a>
             {update_link}
         </h1>
         """,
@@ -5181,6 +5182,58 @@ def _render_script_settings(panel, params):
 
 
 
+@st.fragment(run_every="5s")
+def _render_storyboard_actual_timing(scenes):
+    """Show real per-scene narration and cut durations, once TTS has run."""
+    if not scenes:
+        return
+
+    report = None
+    last_task_id = st.session_state.get("storyboard_last_generation_task_id", "")
+    if last_task_id:
+        candidate = storyboard_timing_display.load_task_timing(last_task_id)
+        if candidate and storyboard_timing_display.matches_scene_voiceovers(
+            candidate, scenes
+        ):
+            report = candidate
+
+    if report is None:
+        # Browser sessions can be recreated after restarting Streamlit; recover
+        # the most recent task whose persisted TTS narration matches the editor.
+        report = storyboard_timing_display.latest_matching_timing(scenes)
+
+    if report is None:
+        st.caption(
+            "Actual scene durations will appear here after TTS has generated "
+            "a matching storyboard. Until then, Auto scenes have no fixed length."
+        )
+        return
+
+    st.markdown("##### Actual timing from TTS")
+    st.caption(
+        f"Based on render {report['task_id'][:8]} and matching scene narration. "
+        "These times were measured after TTS generation."
+    )
+    rows = [
+        {
+            "Scene": f"Scene {entry['index']}",
+            "Voiceover": f"{entry['voice_duration']:.1f} s",
+            "On screen": f"{entry['duration']:.1f} s",
+            "Start → End": f"{entry['start']:.1f} → {entry['end']:.1f} s",
+        }
+        for entry in report["scenes"]
+    ]
+    st.table(rows)
+    st.markdown(
+        f"**Measured audio: {report['audio_duration']:.1f} s**  "
+        f"| **Scene timeline: {report['timeline_duration']:.1f} s**"
+    )
+    st.caption(
+        "Actual scene timing includes narration and any padding. "
+        "The final encoded MP4 can differ slightly due to frame rounding."
+    )
+
+
 def _render_storyboard_editor(params):
     """Maintain stable scene ids so reordering does not lose widget state."""
     st.markdown("#### Storyboard")
@@ -5367,6 +5420,7 @@ def _render_storyboard_editor(params):
                 "Narration may extend individual scenes."
             )
         st.caption(summary)
+        _render_storyboard_actual_timing(result)
     else:
         st.info("Click Add scene to start your storyboard.")
 
@@ -8593,6 +8647,8 @@ def _render_generation_controls(
             st.stop()
 
         st.session_state["current_generation_task_id"] = task_id
+        if params.video_source == "storyboard":
+            st.session_state["storyboard_last_generation_task_id"] = task_id
         logger.info(f"WebUI generation task submitted: task_id={task_id}")
 
     _render_current_generation_task()
