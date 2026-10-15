@@ -58,14 +58,32 @@ taxesai-demo.zip
 4. Make changes and press **Prepare ZIP export**, then **Download Storyboard
    ZIP** for an updated portable copy.
 
-In stage 1, `voiceover` and `voice` are stored as project metadata but
-**not yet used for per-scene TTS**. `duration: "auto"` imports with a 5-second
-preview duration. Real TTS-based scene synchronization is a separate next stage.
+Stage 2 adds **per-scene TTS narration**. When Storyboard scenes contain
+`voiceover`, those texts are authoritative over the general Video Script.
+The narration service synthesises a separate audio file for each voiced scene,
+joins them into `audio.wav` (including silence for scenes without narration),
+and saves their measured boundaries to `scene-timeline.json` alongside the task.
+
+- `duration: "auto"` now uses the real measured TTS length, plus a short
+  0.1-second tail. Empty auto scenes fail with an actionable error.
+- Manual durations are minimums: narration is not truncated if it is longer.
+- A scene exceeding 30 seconds fails rather than clipping speech. Split the
+  narration into multiple scenes or shorten the text.
+- The selected voice in **Audio Settings** is used for each scene. Imported
+  project voice is selected automatically when supported.
+- **Audio Settings → Automatic Voiceover** is required. A separately uploaded
+  full-track narration continues using the original pipeline.
+- The existing subtitle provider uses sentence-level offsets with scene
+  boundaries. Word-level timing is not claimed to be accurate yet.
+
+**Important:** Stage 3 (visual timeline synchronization) is still pending.
+The new timeline accurately describes narration positions, but final video
+cuts are not yet guaranteed to match these positions. The editor may continue
+to show a five-second preview for an auto scene before TTS runs.
+
 On import, the editor combines scene `voiceover` fields into the existing
 **Video Script**, selects the requested TTS voice when available, and restores
-the **Video Subject**. The current **Video Script** and **Audio Settings** still
-control actual narration. Do not treat an imported ZIP as a finished
-synchronized video.
+the **Video Subject**.
 
 ## Validation / safety
 
@@ -84,5 +102,5 @@ synchronized video.
 
 ```powershell
 git pull
-docker compose exec webui python -m pytest test/services/test_storyboard_project.py test/services/test_storyboard.py -q
+docker compose exec webui python -m pytest test/services/test_storyboard_project.py test/services/test_storyboard.py test/services/test_storyboard_narration.py -q
 ```
