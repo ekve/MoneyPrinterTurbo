@@ -168,6 +168,13 @@ def generate_scene_narration(
     if not (params.voice_name or "").strip() or voice.is_no_voice(params.voice_name):
         raise StoryboardNarrationError("select a valid voice for storyboard narration")
 
+    # Validate the whole timeline before contacting any paid TTS provider.
+    for index, scene in enumerate(scenes, start=1):
+        if scene.duration_mode == "auto" and not scene.voiceover.strip():
+            raise StoryboardNarrationError(
+                f"scene {index}: auto-timed scenes require non-empty voiceover"
+            )
+
     task_directory = utils.task_dir(task_id)
     tracks: list[str | None] = []
     durations: list[float] = []
