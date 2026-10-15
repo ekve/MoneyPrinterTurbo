@@ -1755,7 +1755,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
-               title="Open storyboard branch on GitHub">v1.3.8-storyboard_project</a>
+               title="Open storyboard branch on GitHub">v1.3.8-scene_narration</a>
             {update_link}
         </h1>
         """,
@@ -5184,8 +5184,10 @@ def _render_script_settings(panel, params):
 def _render_storyboard_editor(params):
     """Maintain stable scene ids so reordering does not lose widget state."""
     st.markdown("#### Storyboard")
-    st.caption("Import a complete ZIP project or build scenes manually. "
-               "Narration text is saved with each scene; automatic voice sync comes in stage 2.")
+    st.caption("Import a ZIP project or build scenes manually. When scenes include "
+               "voiceover text, each scene gets its own TTS audio and timeline.")
+    st.info("Scene voiceover overrides the general Video Script at generation time. "
+            "Stage 3 will align visual cuts to the generated audio timeline.")
     imported_zip = st.file_uploader(
         "Storyboard ZIP project", type=["zip"], key="storyboard_project_import",
         max_upload_size=60,
@@ -5228,7 +5230,7 @@ def _render_storyboard_editor(params):
         max_chars=200,
     )
     project_voice = st.text_input(
-        "Preferred voice (used in stage 2)",
+        "Preferred TTS voice (select it in Audio Settings)",
         key="storyboard_project_voice_input",
         max_chars=150,
     )
@@ -5268,11 +5270,13 @@ def _render_storyboard_editor(params):
                 index=0 if record.get("duration_mode", "manual") == "manual" else 1,
                 key=f"storyboard_mode_{scene_id}",
                 format_func=lambda mode: (
-                    "Manual" if mode == "manual" else "Auto from voiceover (stage 2)"
+                    "Manual (pad narration if shorter)" if mode == "manual"
+                    else "Auto from voiceover"
                 ),
             )
             if record["duration_mode"] == "auto":
-                st.caption("Stage 1 preview uses 5 seconds. Automatic TTS sync is not active yet.")
+                st.caption("Duration is measured from generated TTS audio. "
+                           "Visual alignment will be enabled in stage 3.")
                 record["duration"] = 5
             else:
                 record["duration"] = st.number_input(
@@ -5281,7 +5285,7 @@ def _render_storyboard_editor(params):
                     key=f"storyboard_duration_{scene_id}",
                 )
             record["voiceover"] = st.text_area(
-                "Scene voiceover (narration in stage 2)",
+                "Scene voiceover (generated individually with TTS)",
                 value=record.get("voiceover", ""),
                 max_chars=5000,
                 key=f"storyboard_voiceover_{scene_id}",
