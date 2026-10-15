@@ -76,10 +76,30 @@ and saves their measured boundaries to `scene-timeline.json` alongside the task.
 - The existing subtitle provider uses sentence-level offsets with scene
   boundaries. Word-level timing is not claimed to be accurate yet.
 
-**Important:** Stage 3 (visual timeline synchronization) is still pending.
-The new timeline accurately describes narration positions, but final video
-cuts are not yet guaranteed to match these positions. The editor may continue
-to show a five-second preview for an auto scene before TTS runs.
+Stage 3 adds a dedicated **visual timeline compositor** for Storyboard.
+
+- Each scene is shown exactly once, in the uploaded order. No stock-material
+  looping, random shuffling, or duplicate filler clips are used.
+- The compositor reads `scene-timeline.json` and cuts each image at that
+  scene's narration boundary. The image sources include extra source frames,
+  avoiding blank frames near fractional-second cuts.
+- Without per-scene audio, scenes must use Manual timing. A mismatch between
+  the total manual visual duration and the actual audio length is reported
+  rather than silently repeating pictures.
+- Stock video providers still use their original montage algorithm.
+- Storyboard playback-speed adjustments and transition effects are currently
+  ignored to preserve exact scene cuts. Use the default 1.0x speed and None
+  transition for synchronized storyboard renders.
+
+The editor shows estimated durations until TTS has been generated. Accurate
+timing is available only after scene narration generation completes.
+
+To verify:
+```powershell
+git pull
+docker compose restart webui
+docker compose exec webui python -m pytest test/services/test_storyboard_timeline.py test/services/test_storyboard_narration.py test/services/test_storyboard.py test/services/test_storyboard_project.py -q
+```
 
 On import, the editor combines scene `voiceover` fields into the existing
 **Video Script**, selects the requested TTS voice when available, and restores
