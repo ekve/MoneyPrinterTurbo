@@ -5273,24 +5273,26 @@ def _render_storyboard_editor(params):
             st.error(str(exc))
         else:
             st.session_state["storyboard_editor_scenes"] = project["scenes"]
-                st.session_state["storyboard_project_title_input"] = project["title"]
-                st.session_state["storyboard_project_voice_input"] = project["voice"]
-                st.session_state["storyboard_pending_subject"] = project["title"]
-                st.session_state["storyboard_pending_script"] = "\n\n".join(
-                    scene["voiceover"] for scene in project["scenes"]
-                    if scene["voiceover"].strip()
-                )
-                if project["voice"]:
-                    st.session_state["storyboard_pending_voice"] = project["voice"]
-                    _set_stable_widget_value(
-                        "tts_server_select",
-                        _infer_tts_server_from_voice(project["voice"]),
-                    )
+            st.session_state["storyboard_project_title_input"] = project["title"]
+            st.session_state["storyboard_project_voice_input"] = project["voice"]
+            st.session_state["storyboard_pending_subject"] = project["title"]
+            st.session_state["storyboard_pending_script"] = "\n\n".join(
+                scene["voiceover"] for scene in project["scenes"]
+                if scene["voiceover"].strip()
+            )
+            if project["voice"]:
+                st.session_state["storyboard_pending_voice"] = project["voice"]
                 _set_stable_widget_value(
-                    "video_aspect_for_storyboard", project["video_aspect"]
+                    "tts_server_select",
+                    _infer_tts_server_from_voice(project["voice"]),
                 )
-                st.session_state.pop("storyboard_export_zip", None)
-                st.rerun()
+            _set_stable_widget_value(
+                "video_aspect_for_storyboard", project["video_aspect"]
+            )
+            st.session_state.pop("storyboard_export_zip", None)
+            # Drop the old uploader only after a completed, successful import.
+            st.session_state["storyboard_project_uploader_nonce"] = uuid4().hex
+            st.rerun()
 
     st.session_state.setdefault("storyboard_project_title_input", "")
     st.session_state.setdefault("storyboard_project_voice_input", "")
