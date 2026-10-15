@@ -27,6 +27,7 @@ from app.services import (
     ofox,
     sonilo,
     storyboard,
+    storyboard_narration,
     subtitle,
     task_artifacts,
     twelvelabs,
@@ -581,6 +582,24 @@ def generate_audio(
             f"invalid custom audio file: {exc}",
         )
         return None, None, None
+
+    if (
+        not custom_audio_file
+        and getattr(params, "video_source", None) == "storyboard"
+        and storyboard_narration.scene_script(params)
+    ):
+        logger.info("generating per-scene storyboard narration")
+        try:
+            return storyboard_narration.generate_scene_narration(
+                task_id,
+                params,
+                voxcpm_reference_audio=voxcpm_reference_audio,
+                voxcpm_prompt_audio=voxcpm_prompt_audio,
+                voxcpm_prompt_text=voxcpm_prompt_text,
+            )
+        except storyboard_narration.StoryboardNarrationError as exc:
+            _mark_task_failed(task_id, "audio", str(exc))
+            return None, None, None
 
     if not custom_audio_file:
         reusable_preview = _resolve_reusable_voice_preview(
@@ -1662,7 +1681,14 @@ def _run_pipeline(
             "in config.toml to a working ffmpeg executable",
         )
 
-    # 1. Generate script
+    # 1. Generate script. In Storyboard mode, scene narration is authoritative.
+    # Avoid generating unrelated LLM copy when a portable project provides it.
+    scene_narration_script = (
+        storyboard_narration.scene_script(params)
+        if params.video_source == "storyboard" else ""
+    )
+    if scene_narration_script:
+        params.video_script = scene_narration_script
     video_script = generate_script(task_id, params)
     # The LLM adapter uses a leading "Error: " as its failure sentinel. A
     # user-provided script may legitimately quote that text anywhere, including
