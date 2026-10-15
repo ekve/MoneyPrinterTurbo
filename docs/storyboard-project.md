@@ -94,6 +94,27 @@ Stage 3 adds a dedicated **visual timeline compositor** for Storyboard.
 The editor shows estimated durations until TTS has been generated. Accurate
 timing is available only after scene narration generation completes.
 
+The editor now shows **Actual timing from TTS** beneath the storyboard:
+
+- Per scene: measured voiceover length, final on-screen duration, and
+  start/end timestamps in the combined narration timeline.
+- Overall: measured joined audio length and calculated scene timeline length.
+- The panel refreshes automatically while TTS is being generated.
+- After a page restart, the editor can locate a previous report whose
+  narration text, order and timing modes match the open storyboard.
+- Editing the scene narration or reordering scenes hides unrelated timings
+  until a matching render exists. A previous render is identified by task ID.
+- "Actual" means **measured TTS + planned scene cuts**, not independent
+  verification of the final encoded MP4's exact duration. Small differences
+  due to FPS rounding are expected.
+
+Validation tests:
+
+```powershell
+docker compose exec webui python -m pytest test/services/test_storyboard_timing_display.py -q
+```
+
+
 To verify:
 ```powershell
 git pull
