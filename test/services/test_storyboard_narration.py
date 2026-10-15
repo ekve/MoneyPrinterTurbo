@@ -112,6 +112,20 @@ def test_generate_scene_narration_produces_timeline_and_combined_audio(tmp_path)
     )
 
 
+def test_auto_scene_without_voice_preflight_skips_paid_tts(tmp_path):
+    settings = params(
+        ai_scene("Valid paid scene"),
+        ai_scene("", duration_mode="auto"),
+    )
+    with (
+        patch.object(storyboard_narration.utils, "task_dir", return_value=str(tmp_path)),
+        patch.object(storyboard_narration.voice, "tts") as synthesize,
+    ):
+        with pytest.raises(storyboard_narration.StoryboardNarrationError, match="scene 2"):
+            storyboard_narration.generate_scene_narration("task-1", settings)
+    synthesize.assert_not_called()
+
+
 def test_tts_error_stops_before_join(tmp_path):
     settings = params(ai_scene("Text"))
     with (
