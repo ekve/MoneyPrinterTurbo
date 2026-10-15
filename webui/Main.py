@@ -8222,6 +8222,7 @@ def _render_generation_controls(
             "loomloom",
             "openai_image",
             "local",
+            "storyboard",
         ]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
