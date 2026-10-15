@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from loguru import logger
 
 from app.models.schema import MaterialInfo, VideoParams
@@ -15,13 +17,17 @@ def _scene_duration(params: VideoParams, scene) -> int:
     return int(scene.duration or params.video_clip_duration)
 
 
-def _build_local_scene(params: VideoParams, scene, index: int) -> str:
+def _build_local_scene(params: VideoParams, scene, index: int, render_duration=None) -> str:
     """
     Convert one uploaded local image into a normal video material.
 
     v0.1 intentionally focuses on screenshots, product UI and brand cards.
     """
-    duration = _scene_duration(params, scene)
+    # Source must be a little longer than the final fractional scene cut.
+    duration = (
+        math.ceil(render_duration) + 1
+        if render_duration is not None else _scene_duration(params, scene)
+    )
 
     extension = utils.parse_extension(scene.file).lower()
     if extension not in {"jpg", "jpeg", "png"}:
@@ -53,8 +59,12 @@ def _build_generated_scene(
     params: VideoParams,
     scene,
     index: int,
+    render_duration=None,
 ) -> str:
-    duration = _scene_duration(params, scene)
+    duration = (
+        math.ceil(render_duration) + 1
+        if render_duration is not None else _scene_duration(params, scene)
+    )
 
     if not material.is_openai_image_enabled():
         raise StoryboardError(
@@ -87,7 +97,9 @@ def _build_generated_scene(
     return rendered_path
 
 
-def build_storyboard_materials(task_id: str, params: VideoParams) -> list[str]:
+def build_storyboard_materials(
+    task_id: str, params: VideoParams, durations: list[float] | None = None
+) -> list[str]:
     """
     Build ordered local/generated scenes and return normal local video paths.
 
@@ -97,9 +109,12 @@ def build_storyboard_materials(task_id: str, params: VideoParams) -> list[str]:
     scenes = list(params.storyboard or [])
     if not scenes:
         raise StoryboardError("storyboard video source requires at least one scene")
+    if durations is not None and len(durations) != len(scenes):
+        raise StoryboardError("scene duration count does not match storyboard")
 
     paths: list[str] = []
     for index, scene in enumerate(scenes, start=1):
+        render_duration = durations[index - 1] if durations is not None else None
         logger.info(
             "building storyboard scene: "
             f"index={index}, type={scene.type}, "
@@ -107,9 +122,11 @@ def build_storyboard_materials(task_id: str, params: VideoParams) -> list[str]:
         )
 
         if scene.type == "local":
-            paths.append(_build_local_scene(params, scene, index))
+            paths.append(_build_local_scene(params, scene, index, render_duration))
         elif scene.type == "generated_image":
-            paths.append(_build_generated_scene(task_id, params, scene, index))
+            paths.append(
+                _build_generated_scene(task_id, params, scene, index, render_duration)
+            )
         else:
             raise StoryboardError(
                 f"storyboard scene {index}: unsupported scene type {scene.type!r}"
