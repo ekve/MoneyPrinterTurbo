@@ -1756,7 +1756,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
-               title="Open storyboard branch on GitHub">v1.3.8-storyboard_timing</a>
+               title="Open storyboard branch on GitHub">v1.3.8-storyboard_import</a>
             {update_link}
         </h1>
         """,
