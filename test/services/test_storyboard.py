@@ -130,3 +130,33 @@ def test_generated_scene_render_failure_stops_before_following_scene():
         with pytest.raises(storyboard.StoryboardError, match="could not be rendered"):
             storyboard.build_storyboard_materials("task-1", params)
     preprocess.assert_not_called()
+
+
+def test_scene_timeline_durations_add_one_second_material_headroom():
+    params = make_params(
+        StoryboardScene(type="generated_image", prompt="Irish tax office", duration=5),
+        StoryboardScene(type="local", file="dashboard.png", duration=5),
+    )
+    generated = [MaterialInfo(provider="openai_image", url="/task/image.png")]
+    local = [MaterialInfo(provider="local", url="/task/dashboard.mp4")]
+    with (
+        patch.object(storyboard.material, "is_openai_image_enabled", return_value=True),
+        patch.object(storyboard.material, "generate_images_openai", return_value=generated) as generate,
+        patch.object(storyboard.video, "render_image_zoom_video", return_value="/task/ai.mp4") as render,
+        patch.object(storyboard.video, "preprocess_video", return_value=local) as preprocess,
+        patch.object(storyboard.utils, "task_dir", return_value="/task"),
+    ):
+        paths = storyboard.build_storyboard_materials("task-1", params, durations=[4.2, 6.5])
+
+    assert paths == ["/task/ai.mp4", "/task/dashboard.mp4"]
+    assert generate.call_args.kwargs["minimum_duration"] == 6
+    assert render.call_args.args[1] == 6
+    assert preprocess.call_args.kwargs["clip_duration"] == 8
+
+
+def test_scene_material_duration_count_must_match():
+    params = make_params(
+        StoryboardScene(type="generated_image", prompt="Taxpayer")
+    )
+    with pytest.raises(storyboard.StoryboardError, match="count"):
+        storyboard.build_storyboard_materials("task-1", params, durations=[2.0, 3.0])
