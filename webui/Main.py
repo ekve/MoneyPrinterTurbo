@@ -5242,22 +5242,37 @@ def _render_storyboard_editor(params):
     st.info("Scene voiceover overrides the general Video Script. "
             "Video cuts now follow each scene's TTS timeline, without repeating images. "
             "Storyboard transitions and clip speed are not applied yet.")
+    # Keep uploader identity stable across reruns, but NEVER across a new
+    # Streamlit session. Otherwise a browser can show the old ZIP filename
+    # after a container restart while the server-side UploadedFile is None.
+    st.session_state.setdefault("storyboard_project_uploader_nonce", uuid4().hex)
+    uploader_key = (
+        "storyboard_project_import_"
+        + st.session_state["storyboard_project_uploader_nonce"]
+    )
     imported_zip = st.file_uploader(
-        "Storyboard ZIP project", type=["zip"], key="storyboard_project_import",
+        "Storyboard ZIP project", type=["zip"], key=uploader_key,
         max_upload_size=60,
     )
-    if st.button("Import ZIP", key="storyboard_import_button"):
-        if imported_zip is None:
-            st.error("Choose a Storyboard ZIP project first.")
+    if imported_zip is None:
+        st.caption(
+            "Select a ZIP file to enable Import. Files must be selected again "
+            "after restarting the WebUI."
+        )
+    else:
+        st.caption(f"Ready to import: {imported_zip.name} ({imported_zip.size:,} bytes)")
+    if st.button(
+        "Import ZIP", key="storyboard_import_button",
+        disabled=imported_zip is None,
+    ):
+        try:
+            if imported_zip.size > storyboard_project.MAX_ARCHIVE_BYTES:
+                raise storyboard_project.StoryboardProjectError("ZIP exceeds 60 MB")
+            project = storyboard_project.import_project(imported_zip.getvalue())
+        except storyboard_project.StoryboardProjectError as exc:
+            st.error(str(exc))
         else:
-            try:
-                if imported_zip.size > storyboard_project.MAX_ARCHIVE_BYTES:
-                    raise storyboard_project.StoryboardProjectError("ZIP exceeds 60 MB")
-                project = storyboard_project.import_project(imported_zip.getvalue())
-            except storyboard_project.StoryboardProjectError as exc:
-                st.error(str(exc))
-            else:
-                st.session_state["storyboard_editor_scenes"] = project["scenes"]
+            st.session_state["storyboard_editor_scenes"] = project["scenes"]
                 st.session_state["storyboard_project_title_input"] = project["title"]
                 st.session_state["storyboard_project_voice_input"] = project["voice"]
                 st.session_state["storyboard_pending_subject"] = project["title"]
