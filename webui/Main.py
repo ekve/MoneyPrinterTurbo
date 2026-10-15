@@ -1755,7 +1755,7 @@ def _render_brand(available_update: str | None = None):
                target="_blank"
                rel="noopener noreferrer"
                aria-label="Open MoneyPrinterTurbo storyboard branch on GitHub"
-               title="Open storyboard branch on GitHub">v1.3.8-scene_narration</a>
+               title="Open storyboard branch on GitHub">v1.3.8-storyboard_timeline</a>
             {update_link}
         </h1>
         """,
@@ -5186,8 +5186,9 @@ def _render_storyboard_editor(params):
     st.markdown("#### Storyboard")
     st.caption("Import a ZIP project or build scenes manually. When scenes include "
                "voiceover text, each scene gets its own TTS audio and timeline.")
-    st.info("Scene voiceover overrides the general Video Script at generation time. "
-            "Stage 3 will align visual cuts to the generated audio timeline.")
+    st.info("Scene voiceover overrides the general Video Script. "
+            "Video cuts now follow each scene's TTS timeline, without repeating images. "
+            "Storyboard transitions and clip speed are not applied yet.")
     imported_zip = st.file_uploader(
         "Storyboard ZIP project", type=["zip"], key="storyboard_project_import",
         max_upload_size=60,
@@ -5275,8 +5276,8 @@ def _render_storyboard_editor(params):
                 ),
             )
             if record["duration_mode"] == "auto":
-                st.caption("Duration is measured from generated TTS audio. "
-                           "Visual alignment will be enabled in stage 3.")
+                st.caption("Duration is measured from scene TTS, and visuals follow "
+                           "that time on the final timeline.")
                 record["duration"] = 5
             else:
                 record["duration"] = st.number_input(
