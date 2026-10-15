@@ -28,6 +28,7 @@ from app.services import (
     sonilo,
     storyboard,
     storyboard_narration,
+    storyboard_timeline,
     subtitle,
     task_artifacts,
     twelvelabs,
@@ -744,11 +745,16 @@ def get_video_materials(
     if params.video_source == "storyboard":
         logger.info("\n\n## building storyboard materials")
         try:
+            durations = storyboard_timeline.scene_durations(task_id, params)
             return storyboard.build_storyboard_materials(
                 task_id=task_id,
                 params=params,
+                durations=durations,
             )
-        except storyboard.StoryboardError as exc:
+        except (
+            storyboard.StoryboardError,
+            storyboard_timeline.StoryboardTimelineError,
+        ) as exc:
             _mark_task_failed(task_id, "materials", str(exc))
             return None
     elif params.video_source == "local":
@@ -1059,27 +1065,36 @@ def generate_final_videos(
         # 每条视频占 50% 进度中的一份，合成与最终编码各占一半。片段处理是
         # 合成里最耗时的部分，逐段推进这一半的进度。
         combine_share = 50 / params.video_count / 2
-        video.combine_videos(
-            combined_video_path=combined_video_path,
-            video_paths=downloaded_videos,
-            audio_file=audio_file,
-            video_aspect=params.video_aspect,
-            video_fit_mode=params.video_fit_mode,
-            video_concat_mode=video_concat_mode,
-            video_transition_mode=video_transition_mode,
-            max_clip_duration=(
-                max(params.video_clip_duration, *(scene.duration or params.video_clip_duration
-                    for scene in (params.storyboard or [])))
-                if params.video_source == "storyboard"
-                else params.video_clip_duration
-            ),
-            threads=params.n_threads,
-            clip_speed=params.video_clip_speed,
-            progress_callback=_stage_progress_reporter(
-                task_id, _progress, _progress + combine_share
-            ),
-            **batch_options,
-        )
+        if params.video_source == "storyboard":
+            storyboard_timeline.combine_storyboard_videos(
+                combined_video_path=combined_video_path,
+                video_paths=downloaded_videos,
+                scene_durations=storyboard_timeline.scene_durations(task_id, params),
+                audio_file=audio_file,
+                video_aspect=params.video_aspect,
+                video_fit_mode=params.video_fit_mode,
+                threads=params.n_threads,
+                progress_callback=_stage_progress_reporter(
+                    task_id, _progress, _progress + combine_share
+                ),
+            )
+        else:
+            video.combine_videos(
+                combined_video_path=combined_video_path,
+                video_paths=downloaded_videos,
+                audio_file=audio_file,
+                video_aspect=params.video_aspect,
+                video_fit_mode=params.video_fit_mode,
+                video_concat_mode=video_concat_mode,
+                video_transition_mode=video_transition_mode,
+                max_clip_duration=params.video_clip_duration,
+                threads=params.n_threads,
+                clip_speed=params.video_clip_speed,
+                progress_callback=_stage_progress_reporter(
+                    task_id, _progress, _progress + combine_share
+                ),
+                **batch_options,
+            )
         if allocate_batch_materials:
             selected_sources = list(dict.fromkeys(used_video_paths))
             reused_sources = [file for file in selected_sources if source_usage.get(file, 0)]
